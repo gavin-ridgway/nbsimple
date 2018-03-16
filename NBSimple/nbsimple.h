@@ -30,6 +30,8 @@ public:
     virtual void run() = 0;
     virtual void stop() = 0;
     virtual void attach(suite *s) = 0;
+    virtual std::size_t exceptionExpected() = 0;
+    virtual void fail(const std::string &msg, bool expected = false) = 0;
 };
 
 class suite
@@ -54,7 +56,19 @@ public:
 
         for (auto test : tests)
         {
-            test->run();
+            try
+            {
+                test->run();
+            }
+
+            catch (std::exception &e)
+            {
+                if (test->exceptionExpected() != typeid(e).hash_code())
+                {
+                    test->fail("unexpected exception caught");
+                    test->stop();
+                }
+            }
         }
 
         // stop suite timer
@@ -73,12 +87,14 @@ public:
     : theSuite(0)
     , name(n)
     , passed(true)
+    , exceptHash()
     , fail_msg()
     {}
     Test(const Test &other)
     : theSuite(other.theSuite)
     , name(other.name)
     , passed(true)
+    , exceptHash(other.exceptHash)
     , fail_msg()
     {}
 
@@ -111,15 +127,28 @@ public:
         stop();
     }
 
-    void fail(const std::string &msg)
+    template <typename T>
+    void expect(T e)
+    {
+        exceptHash = typeid(e).hash_code();
+    }
+
+    std::size_t exceptionExpected() override
+    {
+        return exceptHash;
+    }
+
+    void fail(const std::string &msg, bool expected = false) override
     {
         fail_msg = msg;
+        if (passed & !expected) passed = false;
     }
 
 private:
     suite *theSuite;
     std::string name;
     bool passed;
+    std::size_t exceptHash;
     std::string fail_msg;
 };
 
